@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import sys
 
@@ -51,6 +52,46 @@ def main():
     # TODO: Uncomment the following line to pass the first stage
     print(chat.choices[0].message.content)
 
+    # Get the first choice's message
+    message = chat.choices[0].message
+
+    # Check if the response contains tool calls
+    if hasattr(message, 'tool_calls') and message.tool_calls:
+        # Extract the first tool call
+        tool_call = message.tool_calls[0]
+
+        # Check if it's a function call
+        if tool_call.type == "function":
+            function_name = tool_call.function.name
+
+            # Parse the arguments JSON string
+            try:
+                arguments = json.loads(tool_call.function.arguments)
+            except json.JSONDecodeError:
+                raise RuntimeError(f"Failed to parse arguments: {tool_call.function.arguments}")
+
+            # Execute the Read tool
+            if function_name.lower() in ["read", "readfile"]:
+                file_path = arguments.get("file_path")
+                if not file_path:
+                    raise RuntimeError("file_path parameter is missing")
+
+                try:
+                    # Read and print the file contents
+                    with open(file_path, 'r') as file:
+                        file_contents = file.read()
+                    print(file_contents)
+                except FileNotFoundError:
+                    raise RuntimeError(f"File not found: {file_path}")
+                except IOError as e:
+                    raise RuntimeError(f"Error reading file {file_path}: {e}")
+            else:
+                raise RuntimeError(f"Unsupported function: {function_name}")
+        else:
+            raise RuntimeError(f"Unsupported tool call type: {tool_call.type}")
+    else:
+        # No tool calls, just print the message content
+        print(message.content)
 
 if __name__ == "__main__":
     main()
