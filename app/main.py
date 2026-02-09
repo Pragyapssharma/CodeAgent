@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import sys
+import subprocess
 
 from openai import OpenAI
 
@@ -46,6 +47,42 @@ def execute_write_tool(arguments):
         raise RuntimeError(f"Error writing to file {file_path}: {e}")
 
 
+def execute_bash_tool(arguments):
+    """Execute the Bash tool to run a shell command."""
+    command = arguments.get("command")
+    if not command:
+        raise RuntimeError("command parameter is missing")
+
+    try:
+        # Execute the command and capture both stdout and stderr
+        result = subprocess.run(
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            cwd="."  # Run in current working directory
+        )
+
+        # Combine stdout and stderr
+        output = ""
+        if result.stdout:
+            output += result.stdout
+        if result.stderr:
+            if output and not output.endswith('\n'):
+                output += '\n'
+            output += result.stderr
+
+        # If there's no output but command succeeded, return empty string
+        if not output and result.returncode == 0:
+            return ""
+
+        # Include return code in the output
+        return f"Exit code: {result.returncode}\n{output}".strip()
+
+    except Exception as e:
+        raise RuntimeError(f"Error executing command '{command}': {e}")
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("-p", required=True)
@@ -61,7 +98,7 @@ def main():
         {"role": "user", "content": args.p}
     ]
 
-    # Define the Read and Write tool specifications
+    # Define the Read, Write, and Bash tool specifications
     tools = [
         {
             "type": "function",
@@ -96,6 +133,23 @@ def main():
                         "content": {
                             "type": "string",
                             "description": "The content to write to the file"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "Bash",
+                "description": "Execute a shell command",
+                "parameters": {
+                    "type": "object",
+                    "required": ["command"],
+                    "properties": {
+                        "command": {
+                            "type": "string",
+                            "description": "The command to execute"
                         }
                     }
                 }
@@ -147,6 +201,8 @@ def main():
                         result = execute_read_tool(arguments)
                     elif function_name.lower() in ["write", "writefile", "write_file"]:
                         result = execute_write_tool(arguments)
+                    elif function_name.lower() in ["bash", "shell", "command", "run"]:
+                        result = execute_bash_tool(arguments)
                     else:
                         raise RuntimeError(f"Unsupported function: {function_name}")
 
