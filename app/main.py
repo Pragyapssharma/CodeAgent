@@ -24,6 +24,28 @@ def execute_read_tool(arguments):
         raise RuntimeError(f"Error reading file {file_path}: {e}")
 
 
+def execute_write_tool(arguments):
+    """Execute the Write tool to write content to a file."""
+    file_path = arguments.get("file_path")
+    content = arguments.get("content")
+
+    if not file_path:
+        raise RuntimeError("file_path parameter is missing")
+    if content is None:  # content could be empty string, which is valid
+        raise RuntimeError("content parameter is missing")
+
+    try:
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
+        # Write content to file
+        with open(file_path, 'w') as file:
+            file.write(content)
+        return f"Successfully wrote to {file_path}"
+    except IOError as e:
+        raise RuntimeError(f"Error writing to file {file_path}: {e}")
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("-p", required=True)
@@ -39,7 +61,7 @@ def main():
         {"role": "user", "content": args.p}
     ]
 
-    # Define the Read tool specification
+    # Define the Read and Write tool specifications
     tools = [
         {
             "type": "function",
@@ -55,6 +77,27 @@ def main():
                         }
                     },
                     "required": ["file_path"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "Write",
+                "description": "Write content to a file",
+                "parameters": {
+                    "type": "object",
+                    "required": ["file_path", "content"],
+                    "properties": {
+                        "file_path": {
+                            "type": "string",
+                            "description": "The path of the file to write to"
+                        },
+                        "content": {
+                            "type": "string",
+                            "description": "The content to write to the file"
+                        }
+                    }
                 }
             }
         }
@@ -102,6 +145,8 @@ def main():
                     # Execute the appropriate tool
                     if function_name.lower() in ["read", "readfile", "read_file"]:
                         result = execute_read_tool(arguments)
+                    elif function_name.lower() in ["write", "writefile", "write_file"]:
+                        result = execute_write_tool(arguments)
                     else:
                         raise RuntimeError(f"Unsupported function: {function_name}")
 
